@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Screener — Multi-Timeframe</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f8f7f2;--bg3:#f0efe8;
+  --text:#1a1915;--text2:#5f5e5a;--text3:#888780;
+  --border:#e8e7e0;--border2:#d8d7d0;
+  --green-dark:#27500a;--green-mid:#3b6d11;--green-light:#eaf3de;
+  --red-dark:#a32d2d;--red-light:#fcebeb;
+  --orange:#854f0b;--orange-light:#faeeda;
+  --blue:#185fa5;--radius:8px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg2);color:var(--text);min-height:100vh}
+.app{display:flex;min-height:100vh}
+.sidebar{width:210px;min-width:210px;border-right:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sb-logo{padding:18px 16px 12px;border-bottom:1px solid var(--border)}
+.sb-logo-text{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
+.sb-logo-sub{font-size:10px;color:var(--text3);margin-top:3px}
+.sb-section{padding:12px 12px 4px;font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text2);border-radius:6px;margin:1px 8px;transition:all .12s;user-select:none}
+.sb-item:hover{background:var(--bg3);color:var(--text)}
+.sb-item.active{background:var(--text);color:var(--bg);font-weight:500}
+.sb-item i{font-size:13px;width:14px}
+.sb-badge{margin-left:auto;font-size:10px;background:var(--green-light);color:var(--green-mid);padding:1px 7px;border-radius:10px;font-weight:600}
+.sb-mkt{padding:12px 10px 10px;border-top:1px solid var(--border);margin-top:auto}
+.mkt-label{font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.mkt-btn{display:flex;align-items:center;gap:7px;width:100%;padding:6px 10px;background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px;color:var(--text2);margin-bottom:4px;transition:all .12s;font-family:inherit}
+.mkt-btn:hover,.mkt-btn.on{background:var(--bg);color:var(--text);border-color:var(--border2);font-weight:500}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.topbar{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+.topbar-title{font-size:14px;font-weight:600;color:var(--text);flex:1}
+.scan-btn{padding:7px 16px;background:var(--text);color:var(--bg);border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit}
+.scan-btn:hover{opacity:.85}
+.content{flex:1;padding:16px 18px;overflow-y:auto}
+.panel{display:none}.panel.show{display:block}
+
+/* Condition cards */
+.cond-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.cond-c{border-radius:var(--radius);padding:12px 14px;border:1px solid var(--border);background:var(--bg2)}
+.cond-c.ok{border-color:var(--green-mid);background:var(--green-light)}
+.cond-c.no{border-color:var(--red-dark);background:var(--red-light)}
+.cond-c.watch{border-color:#ba7517;background:var(--orange-light)}
+.cond-label{font-size:10px;color:var(--text3);margin-bottom:5px;font-weight:500}
+.cond-val{font-size:18px;font-weight:600}
+.cond-val.pass{color:var(--green-mid)}.cond-val.fail{color:var(--red-dark)}.cond-val.warn{color:var(--orange)}
+.cond-sub{font-size:10px;color:var(--text3);margin-top:3px}
+
+/* Zone summary */
+.zone-summary{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.zone-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:500}
+.zp-red{background:var(--red-light);color:var(--red-dark);border:1px solid #f5c6c6}
+.zp-green{background:var(--green-light);color:var(--green-dark);border:1px solid #b5d98a}
+
+/* Table */
+.res-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.res-title{font-size:13px;font-weight:600;color:var(--text)}
+.res-count{font-size:11px;color:var(--text3)}
+.res-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px 10px;font-size:10px;font-weight:600;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
+td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg2)}
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:3px 8px;border-radius:10px;font-weight:600}
+.b-buy{background:var(--green-light);color:var(--green-dark)}
+.b-watch{background:var(--orange-light);color:var(--orange)}
+.b-no{background:var(--red-light);color:var(--red-dark)}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+.d-g{background:var(--green-dark)}.d-y{background:#ba7517}.d-r{background:#e24b4a}
+.pass{color:var(--green-mid)}.fail{color:var(--red-dark)}.warn{color:var(--orange)}
+.sym-link{cursor:pointer;font-weight:600;color:var(--text)}
+.sym-link:hover{color:var(--blue);text-decoration:underline}
+.empty{text-align:center;padding:2.5rem;color:var(--text3);font-size:12px}
+.zone-tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600}
+.zt-red{background:var(--red-light);color:var(--red-dark)}
+.zt-green{background:var(--green-light);color:var(--green-dark)}
+
+/* Chart */
+.chart-wrap{position:relative;width:100%;margin-bottom:12px}
+.legend-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;font-size:10px;color:var(--text3)}
+.leg-item{display:flex;align-items:center;gap:4px}
+
+/* Filter */
+.toggle-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:8px}
+.toggle-row input[type=checkbox]{accent-color:var(--text);width:14px;height:14px;cursor:pointer}
+.filter-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.filter-row label{font-size:11px;color:var(--text3);min-width:95px}
+.filter-row input[type=number],.filter-row select{font-size:11px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);width:85px;font-family:inherit}
+.info-box{padding:8px 12px;background:var(--bg2);border-radius:var(--radius);font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.7;border:1px solid var(--border)}
+.section-label{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;margin-top:12px}
+.divider{border-top:1px solid var(--border);margin:12px 0}
+
+/* About */
+.about-card{padding:10px 14px;border-radius:var(--radius);margin-bottom:10px;border-left:3px solid transparent;line-height:1.7;font-size:12px}
+.about-card-title{font-weight:600;color:var(--text);margin-bottom:4px;font-size:12px}
+
+@media(max-width:640px){
+  .sidebar{width:52px;min-width:52px}
+  .sb-item span,.sb-logo-sub,.sb-logo-text span,.sb-section,.mkt-label,.mkt-btn span,.sb-mkt .mkt-btn{display:none}
+  .sb-logo-text{justify-content:center}
+  .cond-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-text"><i class="fa-solid fa-chart-candlestick"></i> <span>Stock Screener</span></div>
+      <div class="sb-logo-sub">Multi-Timeframe RSI + MACD</div>
+    </div>
+    <div class="sb-section">เมนูหลัก</div>
+    <div class="sb-item active" onclick="showPanel('scan',this)" id="tab-scan">
+      <i class="fa-solid fa-magnifying-glass"></i> <span>สแกนหุ้น</span>
+      <span class="sb-badge" id="found-badge" style="display:none">0</span>
+    </div>
+    <div class="sb-item" onclick="showPanel('filter',this)" id="tab-filter">
+      <i class="fa-solid fa-sliders"></i> <span>ตั้งค่าเงื่อนไข</span>
+    </div>
+    <div class="sb-item" onclick="showPanel('chart',this)" id="tab-chart">
+      <i class="fa-solid fa-chart-line"></i> <span>กราฟ MACD</span>
+    </div>
+    <div class="sb-item" onclick="showPanel('about',this)" id="tab-about">
+      <i class="fa-solid fa-circle-info"></i> <span>วิธีอ่านสัญญาณ</span>
+    </div>
+    <div class="sb-mkt">
+      <div class="mkt-label">ตลาด</div>
+      <button class="mkt-btn on" onclick="setMkt(this,'ALL')">🌐 <span>ทั้งหมด</span></button>
+      <button class="mkt-btn" onclick="setMkt(this,'TH')">🇹🇭 <span>SET/MAI</span></button>
+      <button class="mkt-btn" onclick="setMkt(this,'US')">🇺🇸 <span>US Stock</span></button>
+      <button class="mkt-btn" onclick="setMkt(this,'CRYPTO')">₿ <span>Crypto</span></button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="page-title">สแกนหุ้น — 3 Timeframe</span>
+      <button class="scan-btn" onclick="runScan()"><i class="fa-solid fa-magnifying-glass"></i> สแกน</button>
+    </div>
+    <div class="content">
+
+      <!-- SCAN PANEL -->
+      <div class="panel show" id="panel-scan">
+        <div class="cond-row">
+          <div class="cond-c" id="tc-1d">
+            <div class="cond-label"><i class="fa-regular fa-clock"></i> รายวัน (1D)</div>
+            <div class="cond-val" id="val-1d">—</div>
+            <div class="cond-sub">RSI > Signal Line</div>
+          </div>
+          <div class="cond-c" id="tc-1h">
+            <div class="cond-label"><i class="fa-regular fa-clock"></i> รายชั่วโมง (1H)</div>
+            <div class="cond-val" id="val-1h">—</div>
+            <div class="cond-sub">RSI > Signal Line</div>
+          </div>
+          <div class="cond-c" id="tc-1w">
+            <div class="cond-label"><i class="fa-regular fa-calendar"></i> รายสัปดาห์ (1W)</div>
+            <div class="cond-val" id="val-1w">—</div>
+            <div class="cond-sub" id="sub-1w">MACD 2 โซน</div>
+          </div>
+        </div>
+        <div class="zone-summary">
+          <span class="zone-pill zp-red"><span style="width:8px;height:8px;border-radius:50%;background:#f09595;display:inline-block"></span>โซนแดงอ่อน: MACD &lt; 0, ใกล้ตัด Signal ↑</span>
+          <span class="zone-pill zp-green"><span style="width:8px;height:8px;border-radius:50%;background:var(--green-dark);display:inline-block"></span>โซนเขียวเข้ม: MACD &gt; 0, ตัด Signal แล้ว</span>
+        </div>
+        <div class="res-header">
+          <span class="res-title">ผลการสแกน</span>
+          <span class="res-count" id="res-count">กด สแกน เพื่อเริ่ม</span>
+        </div>
+        <div class="res-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>หุ้น</th><th>ตลาด</th>
+                <th>1D RSI</th><th>1D Sig</th>
+                <th>1H RSI</th><th>1H Sig</th>
+                <th>1W MACD</th><th>1W Sig</th>
+                <th>โซน 1W</th><th>สัญญาณ</th>
+              </tr>
+            </thead>
+            <tbody id="res-body">
+              <tr><td colspan="10" class="empty">กด "สแกน" เพื่อเริ่มต้น</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FILTER PANEL -->
+      <div class="panel" id="panel-filter">
+        <div class="section-label">เงื่อนไข RSI</div>
+        <div class="toggle-row"><input type="checkbox" id="f-1d" checked><label for="f-1d">1D: RSI เหนือ Signal Line</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f-1h" checked><label for="f-1h">1H: RSI เหนือ Signal Line</label></div>
+        <div class="divider"></div>
+        <div class="section-label">เงื่อนไข MACD รายสัปดาห์ (1W) — เลือกโซน</div>
+        <div class="toggle-row"><input type="checkbox" id="f-red" checked><label for="f-red"><span class="zone-tag zt-red">โซนแดงอ่อน</span> MACD &lt; 0, ใกล้ตัด Signal ขึ้น</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f-green" checked><label for="f-green"><span class="zone-tag zt-green">โซนเขียวเข้ม</span> MACD &gt; 0, ตัด Signal ขึ้นแล้ว</label></div>
+        <div class="info-box">เลือกได้ทั้งสองโซนพร้อมกัน หรือโซนใดโซนหนึ่ง</div>
+        <div class="divider"></div>
+        <div class="section-label">โซนแดงอ่อน — ระยะห่าง MACD vs Signal</div>
+        <div class="filter-row"><label>ห่างไม่เกิน (%)</label><input type="number" id="prox-threshold" value="20" min="1" max="60"></div>
+        <div class="info-box">ยิ่งน้อยยิ่งใกล้ตัดขึ้น เช่น 20% = ห่างไม่เกิน 20%</div>
+        <div class="divider"></div>
+        <div class="section-label">RSI (1D) Range</div>
+        <div class="filter-row"><label>RSI ต่ำสุด</label><input type="number" id="rsi-min" value="30" min="0" max="100"></div>
+        <div class="filter-row"><label>RSI สูงสุด</label><input type="number" id="rsi-max" value="75" min="0" max="100"></div>
+        <button class="scan-btn" style="margin-top:16px;width:100%;justify-content:center" onclick="showPanel('scan',document.getElementById('tab-scan'));runScan()">
+          <i class="fa-solid fa-magnifying-glass"></i> บันทึกและสแกน
+        </button>
+      </div>
+
+      <!-- CHART PANEL -->
+      <div class="panel" id="panel-chart">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">เลือกหุ้น:</div>
+        <select id="chart-select" onchange="drawChart(this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);margin-bottom:14px;width:160px;font-family:inherit"></select>
+
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:5px">RSI รายวัน (1D)</div>
+        <div class="legend-row">
+          <span class="leg-item"><span style="width:14px;height:2px;background:#378add;border-radius:1px;display:inline-block"></span>RSI</span>
+          <span class="leg-item"><span style="display:inline-block;width:14px;border-top:2px dashed #d85a30"></span>Signal (EMA9)</span>
+        </div>
+        <div class="chart-wrap" style="height:160px"><canvas id="c-rsi"></canvas></div>
+
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:5px;margin-top:8px">MACD รายสัปดาห์ (1W)</div>
+        <div class="legend-row">
+          <span class="leg-item"><span style="width:14px;height:2px;background:#185fa5;border-radius:1px;display:inline-block"></span>MACD</span>
+          <span class="leg-item"><span style="display:inline-block;width:14px;border-top:2px dashed #d85a30"></span>Signal</span>
+          <span class="leg-item"><span style="display:inline-block;width:14px;border-top:2px dashed #888780"></span>Zero Line</span>
+          <span class="leg-item"><span style="width:10px;height:10px;background:rgba(240,149,149,0.4);border-radius:2px;display:inline-block"></span>โซนแดง (MACD&lt;0)</span>
+          <span class="leg-item"><span style="width:10px;height:10px;background:rgba(151,196,89,0.3);border-radius:2px;display:inline-block"></span>โซนเขียว (MACD&gt;0)</span>
+        </div>
+        <div class="chart-wrap" style="height:200px"><canvas id="c-macd"></canvas></div>
+      </div>
+
+      <!-- ABOUT PANEL -->
+      <div class="panel" id="panel-about">
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px">เงื่อนไขการคัดกรอง 3 Timeframe — 2 โซน MACD</div>
+        <div class="about-card" style="background:#f0f7ff;border-left-color:#378add">
+          <div class="about-card-title"><i class="fa-regular fa-clock" style="color:#378add"></i> รายวัน (1D) + รายชั่วโมง (1H) — RSI เหนือ Signal</div>
+          RSI Line อยู่เหนือ Signal Line (EMA 9 ของ RSI) ทั้งสอง Timeframe แสดงว่า Momentum ระยะสั้นและกลางเป็นบวก
+        </div>
+        <div class="about-card" style="background:var(--red-light);border-left-color:var(--red-dark)">
+          <div class="about-card-title" style="color:var(--red-dark)"><span class="zone-tag zt-red">โซนแดงอ่อน</span> 1W MACD &lt; 0, ใกล้ตัด Signal ขึ้น</div>
+          <span style="color:var(--red-dark)">MACD ยังติดลบแต่กำลังวิ่งเข้าหา Signal Line — จุด "เตรียมพร้อม" รอสัญญาณก่อนเข้าซื้อ สัญญาณ: <strong>เฝ้าระวัง</strong></span>
+        </div>
+        <div class="about-card" style="background:var(--green-light);border-left-color:var(--green-dark)">
+          <div class="about-card-title" style="color:var(--green-dark)"><span class="zone-tag zt-green">โซนเขียวเข้ม</span> 1W MACD &gt; 0, ตัด Signal แล้ว</div>
+          <span style="color:var(--green-dark)">MACD ตัดขึ้นเหนือ Signal และอยู่เหนือ Zero Line แนวโน้มใหญ่ Bullish เต็มรูปแบบ สัญญาณ: <strong>ซื้อ</strong></span>
+        </div>
+        <div class="about-card" style="background:var(--orange-light);border-left-color:#ba7517">
+          <div class="about-card-title" style="color:var(--orange)">กลยุทธ์การใช้งาน</div>
+          <span style="color:var(--orange)">โซนแดงอ่อน = รอสัญญาณ เฝ้าระวังใกล้ชิด | โซนเขียวเข้ม = สัญญาณครบ พิจารณาเข้าซื้อ | <strong>หมายเหตุ:</strong> ข้อมูลในโปรแกรมนี้เป็น Mock Data สำหรับสาธิต ควรใช้ร่วมกับข้อมูลจริงก่อนตัดสินใจลงทุน</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let selMkt='ALL', chartRSI=null, chartMACD=null;
+
+const STOCKS=[
+  {sym:'PTT',market:'TH',d:{rsi:58,sig:52},h:{rsi:61,sig:55},w:{macd:-0.4,sig:-0.8},vol:2.4},
+  {sym:'DELTA',market:'TH',d:{rsi:66,sig:60},h:{rsi:63,sig:57},w:{macd:2.5,sig:1.8},vol:4.1},
+  {sym:'AOT',market:'TH',d:{rsi:55,sig:48},h:{rsi:59,sig:52},w:{macd:-1.8,sig:-2.5},vol:3.1},
+  {sym:'KBANK',market:'TH',d:{rsi:42,sig:48},h:{rsi:39,sig:44},w:{macd:-2.5,sig:-1.0},vol:2.8},
+  {sym:'SCB',market:'TH',d:{rsi:62,sig:55},h:{rsi:56,sig:50},w:{macd:-0.5,sig:-0.9},vol:1.8},
+  {sym:'CPALL',market:'TH',d:{rsi:60,sig:54},h:{rsi:58,sig:52},w:{macd:1.2,sig:0.7},vol:2.6},
+  {sym:'BBL',market:'TH',d:{rsi:53,sig:47},h:{rsi:55,sig:49},w:{macd:-3.1,sig:-1.2},vol:2.2},
+  {sym:'NVDA',market:'US',d:{rsi:64,sig:57},h:{rsi:62,sig:55},w:{macd:8.5,sig:6.2},vol:3.5},
+  {sym:'AAPL',market:'US',d:{rsi:55,sig:49},h:{rsi:57,sig:51},w:{macd:-1.1,sig:-1.5},vol:1.8},
+  {sym:'META',market:'US',d:{rsi:61,sig:54},h:{rsi:64,sig:57},w:{macd:4.2,sig:2.8},vol:2.2},
+  {sym:'AMZN',market:'US',d:{rsi:59,sig:53},h:{rsi:61,sig:55},w:{macd:-2.0,sig:-2.8},vol:2.0},
+  {sym:'TSLA',market:'US',d:{rsi:38,sig:44},h:{rsi:41,sig:47},w:{macd:-4.5,sig:-2.0},vol:2.9},
+  {sym:'BTC',market:'CRYPTO',d:{rsi:62,sig:55},h:{rsi:66,sig:59},w:{macd:320,sig:210},vol:3.8},
+  {sym:'ETH',market:'CRYPTO',d:{rsi:59,sig:52},h:{rsi:63,sig:56},w:{macd:-18,sig:-28},vol:2.9},
+  {sym:'SOL',market:'CRYPTO',d:{rsi:57,sig:51},h:{rsi:60,sig:54},w:{macd:12,sig:8},vol:2.5},
+  {sym:'BNB',market:'CRYPTO',d:{rsi:56,sig:50},h:{rsi:59,sig:53},w:{macd:-3.5,sig:-5.2},vol:2.1},
+];
+
+function getZone(s,pt){
+  const m=s.w.macd,sg=s.w.sig;
+  if(m<0&&m<sg){const gap=Math.abs(sg-m)/(Math.abs(m)||1);if(gap<=pt)return 'red';}
+  if(m>0&&m>sg)return 'green';
+  return null;
+}
+
+function passStock(s){
+  if(selMkt!=='ALL'&&s.market!==selMkt)return false;
+  const rMin=parseFloat(document.getElementById('rsi-min').value);
+  const rMax=parseFloat(document.getElementById('rsi-max').value);
+  const pt=parseFloat(document.getElementById('prox-threshold').value)/100;
+  if(document.getElementById('f-1d').checked&&!(s.d.rsi>s.d.sig))return false;
+  if(document.getElementById('f-1h').checked&&!(s.h.rsi>s.h.sig))return false;
+  if(s.d.rsi<rMin||s.d.rsi>rMax)return false;
+  const useRed=document.getElementById('f-red').checked;
+  const useGreen=document.getElementById('f-green').checked;
+  if(!useRed&&!useGreen)return false;
+  const zone=getZone(s,pt);
+  if(!zone)return false;
+  if(zone==='red'&&!useRed)return false;
+  if(zone==='green'&&!useGreen)return false;
+  return true;
+}
+
+function setMkt(el,m){selMkt=m;document.querySelectorAll('.mkt-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+
+function showPanel(id,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('show'));
+  document.getElementById('panel-'+id).classList.add('show');
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  const titles={scan:'สแกนหุ้น — 3 Timeframe',filter:'ตั้งค่าเงื่อนไข',chart:'กราฟ MACD',about:'วิธีอ่านสัญญาณ'};
+  document.getElementById('page-title').textContent=titles[id]||'';
+  if(id==='chart')drawChart(document.getElementById('chart-select').value);
+}
+
+function genRSI(seed,len,base){let a=[base],r=seed;for(let i=1;i<len;i++){r=(r*1103515245+12345)&0x7fffffff;a.push(Math.min(82,Math.max(20,a[i-1]+(r%11)-5.2)));}return a;}
+function ema9(a){const k=2/10;let r=[a[0]];for(let i=1;i<a.length;i++)r.push(+(a[i]*k+r[i-1]*(1-k)).toFixed(3));return r;}
+function genMACD(seed,len,eM,eS){
+  const sM=eM*3.2,sS=eS*3.2;let ma=[sM],si=[sS],r=seed;
+  for(let i=1;i<len;i++){r=(r*1103515245+12345)&0x7fffffff;const p=i/(len-1),n=(r%100-50)*0.008*Math.abs(sM||1);ma.push(+(sM+(eM-sM)*p+n).toFixed(3));si.push(+(sS+(eS-sS)*p+n*0.4).toFixed(3));}
+  ma[ma.length-1]=eM;si[si.length-1]=eS;return{ma,si};
+}
+
+function drawChart(sym){
+  const s=STOCKS.find(x=>x.sym===sym)||STOCKS[0];
+  const dlen=30,wlen=16;
+  const rsiArr=genRSI(s.sym.charCodeAt(0)*7,dlen,s.d.rsi-8);rsiArr[rsiArr.length-1]=s.d.rsi;
+  const rsigArr=ema9(rsiArr);rsigArr[rsigArr.length-1]=s.d.sig;
+  const dlabels=Array.from({length:dlen},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(dlen-i));return`${d.getDate()}/${d.getMonth()+1}`;});
+  const wlabels=Array.from({length:wlen},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(wlen-i)*7);return`W${d.getDate()}/${d.getMonth()+1}`;});
+  const{ma,si}=genMACD(s.sym.charCodeAt(0)*11,wlen,s.w.macd,s.w.sig);
+  const zero=Array(wlen).fill(0);
+  if(chartRSI)chartRSI.destroy();
+  chartRSI=new Chart(document.getElementById('c-rsi'),{type:'line',data:{labels:dlabels,datasets:[
+    {label:'RSI',data:rsiArr.map(v=>+v.toFixed(1)),borderColor:'#378add',borderWidth:2,pointRadius:0,tension:.35},
+    {label:'Signal',data:rsigArr.map(v=>+v.toFixed(1)),borderColor:'#d85a30',borderWidth:1.5,pointRadius:0,tension:.35,borderDash:[4,3]}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:20,max:90,grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{size:9},callback:v=>v===30||v===50||v===70?v:null}},x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:5}}}}});
+  if(chartMACD)chartMACD.destroy();
+  const bgColors=ma.map(v=>v<0?'rgba(240,149,149,0.4)':'rgba(151,196,89,0.35)');
+  chartMACD=new Chart(document.getElementById('c-macd'),{type:'line',data:{labels:wlabels,datasets:[
+    {label:'MACD',data:ma,borderColor:'#185fa5',borderWidth:2,pointRadius:4,pointBackgroundColor:bgColors,pointBorderColor:bgColors,tension:.3},
+    {label:'Signal',data:si,borderColor:'#d85a30',borderWidth:1.5,pointRadius:0,tension:.3,borderDash:[4,3]},
+    {label:'Zero',data:zero,borderColor:'#aaa',borderWidth:1,pointRadius:0,borderDash:[5,4]}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{size:9},maxTicksLimit:5,callback:v=>+v.toFixed(1)}},x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:6}}}}});
+}
+
+function runScan(){
+  const pt=parseFloat(document.getElementById('prox-threshold').value)/100;
+  const filtered=STOCKS.filter(s=>passStock(s));
+  const badge=document.getElementById('found-badge');
+  badge.textContent=filtered.length;badge.style.display=filtered.length>0?'inline':'none';
+  const redC=filtered.filter(s=>getZone(s,pt)==='red').length;
+  const greenC=filtered.filter(s=>getZone(s,pt)==='green').length;
+  document.getElementById('res-count').textContent=`พบ ${filtered.length} รายการ (แดงอ่อน ${redC} · เขียวเข้ม ${greenC})`;
+  const first=filtered[0]||STOCKS[0];
+  const d1ok=first.d.rsi>first.d.sig,h1ok=first.h.rsi>first.h.sig,zone=getZone(first,pt);
+  [['1d',d1ok],['1h',h1ok]].forEach(([tf,ok])=>{
+    document.getElementById('val-'+tf).className='cond-val '+(ok?'pass':'fail');
+    document.getElementById('val-'+tf).textContent=ok?'ผ่าน':'ไม่ผ่าน';
+    document.getElementById('tc-'+tf).className='cond-c '+(ok?'ok':'no');
+  });
+  const w1el=document.getElementById('val-1w'),w1sub=document.getElementById('sub-1w');
+  if(zone==='red'){w1el.className='cond-val warn';w1el.textContent='โซนแดงอ่อน';w1sub.textContent='ใกล้ตัด Signal ขึ้น';document.getElementById('tc-1w').className='cond-c watch';}
+  else if(zone==='green'){w1el.className='cond-val pass';w1el.textContent='โซนเขียวเข้ม';w1sub.textContent='ตัด Signal ขึ้นแล้ว';document.getElementById('tc-1w').className='cond-c ok';}
+  else{w1el.className='cond-val fail';w1el.textContent='ไม่ผ่าน';w1sub.textContent='MACD 2 โซน';document.getElementById('tc-1w').className='cond-c no';}
+  const sel=document.getElementById('chart-select');
+  sel.innerHTML=STOCKS.map(s=>`<option value="${s.sym}">${s.sym} (${s.market})</option>`).join('');
+  if(filtered.length>0){sel.value=filtered[0].sym;drawChart(filtered[0].sym);}
+  const tbody=document.getElementById('res-body');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="10" class="empty">ไม่พบหุ้นที่ผ่านเงื่อนไข — ลองปรับค่าระยะห่าง %</td></tr>';return;}
+  tbody.innerHTML=filtered.map(s=>{
+    const d1=s.d.rsi>s.d.sig,h1=s.h.rsi>s.h.sig,z=getZone(s,pt);
+    const mkt=s.market==='TH'?'🇹🇭':s.market==='US'?'🇺🇸':'₿';
+    const fmt=v=>Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);
+    const zTag=z==='red'?'<span class="zone-tag zt-red">แดงอ่อน</span>':'<span class="zone-tag zt-green">เขียวเข้ม</span>';
+    const sig=z==='green'?'<span class="badge b-buy"><span class="dot d-g"></span>ซื้อ</span>':z==='red'?'<span class="badge b-watch"><span class="dot d-y"></span>เฝ้าระวัง</span>':'<span class="badge b-no"><span class="dot d-r"></span>รอ</span>';
+    return`<tr><td><span class="sym-link" onclick="document.getElementById('chart-select').value='${s.sym}';showPanel('chart',document.getElementById('tab-chart'))">${s.sym}</span></td><td>${mkt}</td><td class="${d1?'pass':'fail'}">${s.d.rsi.toFixed(1)}</td><td>${s.d.sig.toFixed(1)}</td><td class="${h1?'pass':'fail'}">${s.h.rsi.toFixed(1)}</td><td>${s.h.sig.toFixed(1)}</td><td style="color:${s.w.macd<0?'#a32d2d':'#27500a'}">${fmt(s.w.macd)}</td><td>${fmt(s.w.sig)}</td><td>${zTag}</td><td>${sig}</td></tr>`;
+  }).join('');
+}
+
+runScan();
+</script>
+</body>
+</html>
